@@ -110,17 +110,37 @@ function M._set_version(version)
     return
   end
 
-  --- @type vim.SystemCompleted
-  local obj = asystem({ 'git', '--version' })
+  local max_retries = 5
+  local attempt = 0
+  local line
 
-  local line = vim.split(obj.stdout or '', '\n', { plain = true })[1]
-  if not line then
-    err("Unable to detect git version as 'git --version' failed to return anything")
-    eprint(obj.stderr)
-    return
+  while true do
+    attempt = attempt + 1
+
+    --- @type vim.SystemCompleted
+    local obj = asystem({ 'git', '--version' })
+
+    line = vim.split(obj.stdout or '', '\n', { plain = true })[1]
+    if not line then
+      err("Unable to detect git version as 'git --version' failed to return anything")
+      eprint(obj.stderr)
+      return
+    end
+    assert(type(line) == 'string', 'Unexpected output: ' .. line)
+
+    if attempt <= max_retries then
+      if startswith(line, 'git version') then
+        if attempt > 1 then
+          vim.notify('Got gitsigns version after ' .. attempt .. ' attempts', vim.log.levels.DEBUG)
+        end
+        break
+      end
+    else
+      assert(startswith(line, 'git version'), 'Unexpected output: "' .. line .. '" at attempt=' .. attempt)
+      break
+    end
   end
-  assert(type(line) == 'string', 'Unexpected output: ' .. line)
-  assert(startswith(line, 'git version'), 'Unexpected output: ' .. line)
+
   local parts = vim.split(line, '%s+')
   M.version = parse_version(parts[3])
 end
